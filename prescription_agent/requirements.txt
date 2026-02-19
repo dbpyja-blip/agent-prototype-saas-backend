@@ -1,0 +1,9 @@
+fastapi==0.111.0
+uvicorn==0.30.1
+crewai>=0.35.8
+
+python-dotenv>=1.0.1
+pydantic>=2.7.4
+requests>=2.32.3
+pymupdf>=1.23.26
+python-multipart>=0.0.9

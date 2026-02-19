@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-dotenv
+python-multipart
+assemblyai
+python-magic; platform_system != "Windows"
+python-magic-bin; platform_system == "Windows"
