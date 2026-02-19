@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
+# Expose port 8006 for Render default
 EXPOSE 8006
 
-CMD ["python", "prescription_agent.py"]
+# Use uvicorn directly to bind to port 8006, overriding the hardcoded 8006 in name==main block
+CMD ["uvicorn", "prescription_agent:app", "--host", "0.0.0.0", "--port", "8006"]
