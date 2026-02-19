@@ -1,8 +1,9 @@
 fastapi
 uvicorn
-crewai
+crewai[azure-ai-inference]
 python-dotenv
 pydantic
 requests
 pymupdf
 python-multipart
+azure-ai-inference
