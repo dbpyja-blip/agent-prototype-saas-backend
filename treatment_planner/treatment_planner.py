@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 
 # Third-party imports
-import psycopg2
-from psycopg2 import pool
+# import psycopg2
+# from psycopg2 import pool
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import BaseTool
 
@@ -28,83 +28,83 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # --------------------------------------------------------------------------------
-# 1. DATABASE CONNECTION POOL (Inlined from statictools.py)
+# 1. MOCK DATA (Replaces Database)
 # --------------------------------------------------------------------------------
 
-_sync_connection_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None
-
-def init_sync_connection_pool(minconn: int = 2, maxconn: int = 10):
-    """Initialize synchronous connection pool for psycopg2"""
-    global _sync_connection_pool
-    if _sync_connection_pool is None:
-        try:
-            _sync_connection_pool = psycopg2.pool.ThreadedConnectionPool(
-                minconn=minconn,
-                maxconn=maxconn,
-                dbname=os.getenv("DB_NAME"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-                host=os.getenv("DB_HOST"),
-                port=os.getenv("DB_PORT", 5432)
-            )
-            logger.info(f"Sync connection pool initialized: min={minconn}, max={maxconn}")
-        except Exception as e:
-            logger.error(f"Failed to initialize sync connection pool: {e}")
-            raise
-
-class PooledConnection:
-    """Wrapper for pooled connections that returns to pool on close"""
-    def __init__(self, conn, pool):
-        self._conn = conn
-        self._pool = pool
-        self._closed = False
-    
-    def __enter__(self):
-        return self._conn
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-    
-    def close(self):
-        """Return connection to pool instead of closing it"""
-        if not self._closed and self._pool:
-            try:
-                self._pool.putconn(self._conn)
-                self._closed = True
-            except Exception as e:
-                logger.warning(f"Error returning connection to pool: {e}")
-    
-    def cursor(self, *args, **kwargs):
-        return self._conn.cursor(*args, **kwargs)
-    
-    def commit(self):
-        return self._conn.commit()
-    
-    def rollback(self):
-        return self._conn.rollback()
-    
-    def __getattr__(self, name):
-        return getattr(self._conn, name)
-
-def _connect():
-    """Get connection from sync pool - automatically returns to pool when closed"""
-    global _sync_connection_pool
-    try:
-        if _sync_connection_pool is None:
-            init_sync_connection_pool()
-        
-        conn = _sync_connection_pool.getconn()
-        return PooledConnection(conn, _sync_connection_pool)
-    except Exception as e:
-        logger.error(f"Database connection error: {str(e)}")
-        # Fallback to direct connection if pool fails
-        return psycopg2.connect(
-            dbname=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT", 5432)
-        )
+MOCK_DB = {
+    "clinical_services": [
+        {'service_uid': 1, 'service_title': 'Hair Transplant Consultation', 'category_label': 'Dermatology', 'estimated_duration_minutes': 30, 'base_fee': 1500.00},
+        {'service_uid': 2, 'service_title': 'PRP Therapy Session', 'category_label': 'Cosmetic Treatment', 'estimated_duration_minutes': 60, 'base_fee': 4500.00},
+        {'service_uid': 3, 'service_title': 'Laser Hair Reduction', 'category_label': 'Aesthetic', 'estimated_duration_minutes': 45, 'base_fee': 3000.00},
+        {'service_uid': 4, 'service_title': 'General Physician Consultation', 'category_label': 'General Medicine', 'estimated_duration_minutes': 20, 'base_fee': 800.00},
+        {'service_uid': 5, 'service_title': 'Skin Allergy Testing', 'category_label': 'Dermatology', 'estimated_duration_minutes': 40, 'base_fee': 2500.00},
+        {'service_uid': 6, 'service_title': 'Acne Treatment Program', 'category_label': 'Dermatology', 'estimated_duration_minutes': 50, 'base_fee': 3500.00},
+        {'service_uid': 7, 'service_title': 'Dental Cleaning & Polishing', 'category_label': 'Dental', 'estimated_duration_minutes': 45, 'base_fee': 2000.00},
+        {'service_uid': 8, 'service_title': 'Root Canal Treatment', 'category_label': 'Dental', 'estimated_duration_minutes': 90, 'base_fee': 6000.00},
+        {'service_uid': 9, 'service_title': 'Physiotherapy Session', 'category_label': 'Rehabilitation', 'estimated_duration_minutes': 60, 'base_fee': 1200.00},
+        {'service_uid': 10, 'service_title': 'Nutrition Counseling', 'category_label': 'Wellness', 'estimated_duration_minutes': 30, 'base_fee': 1000.00},
+        {'service_uid': 11, 'service_title': 'Cardiology Checkup', 'category_label': 'Cardiology', 'estimated_duration_minutes': 35, 'base_fee': 2200.00},
+        {'service_uid': 12, 'service_title': 'Orthopedic Evaluation', 'category_label': 'Orthopedics', 'estimated_duration_minutes': 30, 'base_fee': 1800.00},
+        {'service_uid': 13, 'service_title': 'Eye Vision Assessment', 'category_label': 'Ophthalmology', 'estimated_duration_minutes': 25, 'base_fee': 900.00},
+        {'service_uid': 14, 'service_title': 'Dermatoscopy Examination', 'category_label': 'Dermatology', 'estimated_duration_minutes': 20, 'base_fee': 1300.00},
+        {'service_uid': 15, 'service_title': 'Full Body Health Screening', 'category_label': 'Preventive Care', 'estimated_duration_minutes': 120, 'base_fee': 7000.00},
+        {'service_uid': 16, 'service_title': 'Post Surgery Follow-up', 'category_label': 'General Medicine', 'estimated_duration_minutes': 20, 'base_fee': 700.00},
+        {'service_uid': 17, 'service_title': 'Cosmetic Skin Rejuvenation', 'category_label': 'Aesthetic', 'estimated_duration_minutes': 75, 'base_fee': 5000.00},
+        {'service_uid': 18, 'service_title': 'Weight Management Program', 'category_label': 'Wellness', 'estimated_duration_minutes': 60, 'base_fee': 4000.00},
+        {'service_uid': 19, 'service_title': 'Thyroid Consultation', 'category_label': 'Endocrinology', 'estimated_duration_minutes': 25, 'base_fee': 1600.00},
+        {'service_uid': 20, 'service_title': 'Pediatric Consultation', 'category_label': 'Pediatrics', 'estimated_duration_minutes': 20, 'base_fee': 850.00},
+        {'service_uid': 21, 'service_title': 'Vaccination Service', 'category_label': 'Preventive Care', 'estimated_duration_minutes': 15, 'base_fee': 600.00},
+        {'service_uid': 22, 'service_title': 'Mental Health Counseling', 'category_label': 'Psychology', 'estimated_duration_minutes': 50, 'base_fee': 2500.00}
+    ],
+    "medical_products": [
+        {'product_uid': 1, 'item_label': 'Minoxidil 5% Solution', 'brand_name': "Dr. Reddy's", 'unit_price': 850.00, 'discounted_rate': 799.00},
+        {'product_uid': 2, 'item_label': 'Finasteride Tablets 1mg', 'brand_name': 'Cipla', 'unit_price': 650.00, 'discounted_rate': 599.00},
+        {'product_uid': 3, 'item_label': 'Vitamin D3 Capsules', 'brand_name': 'Sun Pharma', 'unit_price': 300.00, 'discounted_rate': 250.00},
+        {'product_uid': 4, 'item_label': 'Biotin Supplements', 'brand_name': 'HealthKart', 'unit_price': 500.00, 'discounted_rate': 449.00},
+        {'product_uid': 5, 'item_label': 'Hair Growth Serum', 'brand_name': 'Mamaearth', 'unit_price': 999.00, 'discounted_rate': 899.00},
+        {'product_uid': 6, 'item_label': 'Anti-Dandruff Shampoo', 'brand_name': 'Head & Shoulders', 'unit_price': 450.00, 'discounted_rate': 399.00},
+        {'product_uid': 7, 'item_label': 'Multivitamin Tablets', 'brand_name': 'Himalaya', 'unit_price': 550.00, 'discounted_rate': 499.00},
+        {'product_uid': 8, 'item_label': 'Omega 3 Fish Oil', 'brand_name': 'Now Foods', 'unit_price': 1200.00, 'discounted_rate': 1050.00},
+        {'product_uid': 9, 'item_label': 'Protein Powder Whey', 'brand_name': 'Optimum Nutrition', 'unit_price': 3500.00, 'discounted_rate': 3200.00},
+        {'product_uid': 10, 'item_label': 'Pain Relief Gel', 'brand_name': 'Volini', 'unit_price': 200.00, 'discounted_rate': 180.00},
+        {'product_uid': 11, 'item_label': 'Antibiotic Ointment', 'brand_name': 'Neosporin', 'unit_price': 180.00, 'discounted_rate': 160.00},
+        {'product_uid': 12, 'item_label': 'SPF 50 Sunscreen Lotion', 'brand_name': 'Neutrogena', 'unit_price': 650.00, 'discounted_rate': 599.00},
+        {'product_uid': 13, 'item_label': 'Salicylic Acid Face Wash', 'brand_name': 'Minimalist', 'unit_price': 349.00, 'discounted_rate': 299.00},
+        {'product_uid': 14, 'item_label': 'Collagen Powder', 'brand_name': 'Oziva', 'unit_price': 2200.00, 'discounted_rate': 1999.00},
+        {'product_uid': 15, 'item_label': 'Zinc Tablets', 'brand_name': 'HealthVit', 'unit_price': 250.00, 'discounted_rate': 220.00},
+        {'product_uid': 16, 'item_label': 'Iron Supplements', 'brand_name': 'Dexorange', 'unit_price': 190.00, 'discounted_rate': 170.00},
+        {'product_uid': 17, 'item_label': 'Aloe Vera Gel', 'brand_name': 'Patanjali', 'unit_price': 120.00, 'discounted_rate': 99.00},
+        {'product_uid': 18, 'item_label': 'Ketoconazole Shampoo', 'brand_name': 'Nizoral', 'unit_price': 700.00, 'discounted_rate': 650.00},
+        {'product_uid': 19, 'item_label': 'Glucose Monitoring Strips', 'brand_name': 'Accu-Chek', 'unit_price': 1500.00, 'discounted_rate': 1400.00},
+        {'product_uid': 20, 'item_label': 'Therapeutic Hair Mask', 'brand_name': "L'Oreal", 'unit_price': 850.00, 'discounted_rate': 799.00},
+        {'product_uid': 21, 'item_label': 'Probiotic Capsules', 'brand_name': 'GNC', 'unit_price': 1600.00, 'discounted_rate': 1450.00},
+        {'product_uid': 22, 'item_label': 'Calcium Tablets', 'brand_name': 'Shelcal', 'unit_price': 300.00, 'discounted_rate': 270.00}
+    ],
+    "lab_diagnostic_catalog": [
+        {'test_uid': 1, 'examination_name': 'Complete Blood Count (CBC)', 'department_tag': 'Pathology', 'test_cost': 350.00},
+        {'test_uid': 2, 'examination_name': 'Lipid Profile Test', 'department_tag': 'Biochemistry', 'test_cost': 800.00},
+        {'test_uid': 3, 'examination_name': 'Liver Function Test (LFT)', 'department_tag': 'Biochemistry', 'test_cost': 900.00},
+        {'test_uid': 4, 'examination_name': 'Kidney Function Test (KFT)', 'department_tag': 'Biochemistry', 'test_cost': 850.00},
+        {'test_uid': 5, 'examination_name': 'Thyroid Profile (T3 T4 TSH)', 'department_tag': 'Endocrinology', 'test_cost': 750.00},
+        {'test_uid': 6, 'examination_name': 'Blood Sugar Fasting', 'department_tag': 'Diabetology', 'test_cost': 120.00},
+        {'test_uid': 7, 'examination_name': 'HbA1c Test', 'department_tag': 'Diabetology', 'test_cost': 600.00},
+        {'test_uid': 8, 'examination_name': 'Vitamin B12 Test', 'department_tag': 'Pathology', 'test_cost': 950.00},
+        {'test_uid': 9, 'examination_name': 'Vitamin D Test', 'department_tag': 'Pathology', 'test_cost': 1200.00},
+        {'test_uid': 10, 'examination_name': 'Urine Routine Examination', 'department_tag': 'Pathology', 'test_cost': 200.00},
+        {'test_uid': 11, 'examination_name': 'ESR Test', 'department_tag': 'Pathology', 'test_cost': 150.00},
+        {'test_uid': 12, 'examination_name': 'CRP Test', 'department_tag': 'Immunology', 'test_cost': 700.00},
+        {'test_uid': 13, 'examination_name': 'Dengue NS1 Antigen Test', 'department_tag': 'Microbiology', 'test_cost': 1000.00},
+        {'test_uid': 14, 'examination_name': 'Malaria Parasite Test', 'department_tag': 'Microbiology', 'test_cost': 500.00},
+        {'test_uid': 15, 'examination_name': 'COVID-19 RT-PCR', 'department_tag': 'Virology', 'test_cost': 1500.00},
+        {'test_uid': 16, 'examination_name': 'X-Ray Chest', 'department_tag': 'Radiology', 'test_cost': 800.00},
+        {'test_uid': 17, 'examination_name': 'Ultrasound Abdomen', 'department_tag': 'Radiology', 'test_cost': 1800.00},
+        {'test_uid': 18, 'examination_name': 'ECG Test', 'department_tag': 'Cardiology', 'test_cost': 400.00},
+        {'test_uid': 19, 'examination_name': '2D Echo Test', 'department_tag': 'Cardiology', 'test_cost': 2500.00},
+        {'test_uid': 20, 'examination_name': 'Allergy Panel Test', 'department_tag': 'Immunology', 'test_cost': 2200.00},
+        {'test_uid': 21, 'examination_name': 'Hormone Panel Test', 'department_tag': 'Endocrinology', 'test_cost': 3000.00},
+        {'test_uid': 22, 'examination_name': 'Ferritin Test', 'department_tag': 'Pathology', 'test_cost': 900.00}
+    ]
+}
 
 # --------------------------------------------------------------------------------
 # 2. MEMORY IMPLEMENTATION (Simple Fallback)
@@ -225,58 +225,103 @@ class DatabaseQueryTool(BaseTool):
     args_schema: type = DatabaseQueryToolSchema
     
     def _run(self, query: str, query_type: str = "general") -> str:
-        """Execute database query"""
+        """Execute mock database query"""
         try:
             query = str(query).strip() if query else ""
             if not query:
                 return "Empty query provided"
             
-            # Direct SQL execution
-            if query.lstrip().lower().startswith("select"):
-                return self._execute_simple_query(query)
+            # Simple keyword search simulation based on standard SQL patterns
+            query_lower = query.lower()
             
-            # Fallback for non-SQL queries
-            return "Please provide a valid SQL SELECT query."
+            # 1. Identify Target Table
+            target_table = None
+            
+            # Try from SQL
+            if "from clinical_services" in query_lower:
+                target_table = "clinical_services"
+            elif "from medical_products" in query_lower:
+                target_table = "medical_products"
+            elif "from lab_diagnostic_catalog" in query_lower:
+                target_table = "lab_diagnostic_catalog"
+            
+            # Try from query_type if not found in SQL
+            if not target_table:
+                if "service" in query_type.lower():
+                    target_table = "clinical_services"
+                elif "product" in query_type.lower() or "medication" in query_type.lower():
+                    target_table = "medical_products"
+                elif "lab" in query_type.lower() or "diagnostic" in query_type.lower():
+                    target_table = "lab_diagnostic_catalog"
+            
+            if not target_table:
+                return "Table not found or supported in mock DB. Please specify query_type (services, products, labs)."
+
+            # 2. Extract Search Term
+            search_term = query
+            
+            # If it looks like SQL, extract the term from ILIKE
+            if "ilike" in query_lower:
+                parts = query_lower.split("ilike")
+                if len(parts) > 1:
+                    raw_term = parts[1].split("limit")[0].strip()
+                    search_term = raw_term.replace("'", "").replace("%", "").replace(";", "")
+            else:
+                # Require explicit SELECT if not using query_type fallback, but here we allow loose queries
+                # Clean up if the agent just passed "SELECT * FROM ... WHERE ... 'term'" awkwardly
+                if "select" in query_lower and "where" in query_lower:
+                     # Fallback extraction roughly
+                     pass
+            
+            search_term = search_term.replace("%", "").replace("'", "").strip()
+            
+            if not search_term:
+                return "Could not parse search term"
+
+            # 3. Filter Data with Scoring
+            scored_results = []
+            source_data = MOCK_DB.get(target_table, [])
+            
+            # Tokenize search term
+            search_tokens = [t for t in search_term.lower().split() if len(t) > 2] # Ignore short words
+            
+            for item in source_data:
+                score = 0
+                item_str = str(item).lower()
+                
+                # Full substring match gets highest priority
+                if search_term.lower() in item_str:
+                    score += 10
+                
+                # Token match
+                for token in search_tokens:
+                    if token in item_str:
+                        score += 1
+                
+                if score > 0:
+                    scored_results.append((score, item))
+            
+            # Sort by score desc and take top 5
+            scored_results.sort(key=lambda x: x[0], reverse=True)
+            results = [item for score, item in scored_results[:5]]
+            
+            # 4. Format results
+            if not results:
+                return "No results found for the query"
+                
+            result_str = "Query Results:\n"
+            for i, row in enumerate(results[:5]): # Limit 5
+                result_str += f"Row {i+1}: {row}\n"
+            
+            return result_str
                     
         except Exception as e:
             logger.error(f"DatabaseQueryTool Error: {e}", exc_info=True)
             return f"Error executing database query: {str(e)}"
-
+    
     def _execute_simple_query(self, sql_query: str) -> str:
-        """Execute simple SQL query using direct database connection"""
-        try:
-            if not sql_query.lstrip().lower().startswith("select"):
-                return "Only SELECT queries are allowed"
-
-            with _connect() as conn, conn.cursor() as cur:
-                cur.execute(sql_query)
-                data = cur.fetchall()
-                
-                try:
-                    column_names = [desc[0] for desc in cur.description] if cur.description else []
-                except:
-                    column_names = []
-                
-                if not data:
-                    return "No results found for the query"
-                
-                if len(data) == 1 and len(data[0]) == 1:
-                    return f"Query Result: {data[0][0]}"
-                else:
-                    result_str = "Query Results:\n"
-                    # Limit rows to avoid token overflow
-                    for i, row in enumerate(data[:15]): 
-                        if column_names and len(row) == len(column_names):
-                            row_dict = dict(zip(column_names, row))
-                            result_str += f"Row {i+1}: {row_dict}\n"
-                        else:
-                            result_str += f"Row {i+1}: {row}\n"
-                    if len(data) > 15:
-                        result_str += f"... and {len(data) - 15} more rows"
-                    return result_str
-                    
-        except Exception as e:
-            return f"Error executing query: {str(e)}"
+        # Redirect all to _run since we aren't doing real SQL
+        return self._run(sql_query)
 
 # --------------------------------------------------------------------------------
 # 5. TREATMENT PLANNER ENDPOINT LOGIC
@@ -527,8 +572,7 @@ RETURN JSON ONLY:
 if __name__ == "__main__":
     import uvicorn
     from fastapi import FastAPI
-    # Make sure pool is initialized if running directly
-    init_sync_connection_pool()
+    # NO pool init needed for Mock DB
     
     app = FastAPI()
     
