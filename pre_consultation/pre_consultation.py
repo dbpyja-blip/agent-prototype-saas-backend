@@ -327,10 +327,10 @@ class PreConsultationAgent:
             expected = f"JSON with answer_accepted bool and either re-asking {current_field['label']} or next question."
 
         agent = Agent(
-            role="Aadhya — Clinical Intake Specialist",
+            role="HealthBot — Clinical Intake Specialist",
             goal="Conduct a warm, professional patient intake conversation and validate each answer.",
             backstory=(
-                "You are Aadhya, a compassionate and detail-oriented medical intake specialist. "
+                "You are HealthBot, a compassionate and detail-oriented medical intake specialist. "
                 "You guide patients gently through their intake form, validate their answers, "
                 "and produce thorough clinical summaries for the attending physician."
             ),
@@ -367,7 +367,7 @@ class PreConsultationAgent:
 
         mcq_opts = next_field["options"] if next_field["type"] == "mcq" else []
 
-        return f"""You are Aadhya, a warm medical intake assistant 👩‍⚕️.
+        return f"""You are HealthBot, a warm medical intake assistant 👩‍⚕️.
 
 Conversation so far:
 {history_text}
@@ -449,7 +449,7 @@ Note: {type_note}
             next_type_note = '"question_type": null'
             next_field_info = "If the answer IS valid, all questions are complete. Set status to 'end' and move to summary."
 
-        return f"""You are Aadhya, a warm and professional medical intake assistant 👩‍⚕️.
+        return f"""You are HealthBot, a warm and professional medical intake assistant 👩‍⚕️.
 
 Conversation so far:
 {history_text}
@@ -529,7 +529,7 @@ Template B (answer VALID - ask next question):
             else "No fields were skipped."
         )
 
-        return f"""You are Aadhya, a clinical intake assistant who has just completed collecting information from {name_display}.
+        return f"""You are HealthBot, a clinical intake assistant who has just completed collecting information from {name_display}.
 
 Full conversation:
 {history_text}
@@ -639,10 +639,10 @@ Respond with ONLY a valid JSON object:
         expected = "JSON with status=end, a warm response, and a rich markdown booking_summary."
 
         agent = Agent(
-            role="Aadhya — Clinical Intake Specialist",
+            role="HealthBot — Clinical Intake Specialist",
             goal="Generate a detailed clinical intake summary for the attending physician.",
             backstory=(
-                "You are Aadhya, a compassionate and detail-oriented medical intake specialist. "
+                "You are HealthBot, a compassionate and detail-oriented medical intake specialist. "
                 "You have just completed the patient intake interview and must now produce a "
                 "thorough, doctor-facing clinical summary from the conversation."
             ),
