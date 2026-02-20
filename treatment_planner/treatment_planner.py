@@ -442,8 +442,14 @@ async def run_treatment_planner(request: TreatmentPlannerRequest):
 
 **INTERACTION FLOW**:
 - If this is the START: Parse the notes -> Create Plans -> Status: 'in_progress'. ask "Does this look correct?"
-- If the doctor gives FEEDBACK: Modify the plans -> Status: 'in_progress'. ask "Any other changes?"
+- If the doctor gives FEEDBACK: **START FROM THE LAST FULL PLAN IN HISTORY. Only change what the doctor explicitly asked. Copy everything else EXACTLY as it was — do NOT drop or reset any medications, lab tests, or other fields.** Status: 'in_progress'. ask "Any other changes?"
 - If the doctor says "Looks good" or "Confirm" or "Finish": Status: 'finished'.
+
+**SERVICE MATCHING RULE (CRITICAL)**:
+- When you search for a service and the DB returns results, pick the BEST MATCHING result from the list.
+- Do NOT return null/unverified just because the exact name typed by the doctor was not found. Use the closest DB match.
+- Example: Doctor says "Hair Transplantation" -> DB returns "Hair Transplant Consultation" -> Use that entry, mark verified: true.
+- Only set verified: false if NO related result is found at all.
 **HALLUCINATION PREVENTION PROTOCOL (CRITICAL)**:
 1. **NO GUESSING**: If a medication, service, or lab test is not found in the database, you MUST set `"verified": false` and leave fields like `product_uid`, `test_uid` as `null`.
 2. **NO INVENTED DATA**: Do NOT make up prices, brand names, or codes. Only use what the `database_query` tool returns.
@@ -510,11 +516,15 @@ LATEST INPUT FROM DOCTOR:
 
 YOUR TASK:
 1. Analyze the history and latest input.
-2. If this is a new plan, extract and verify everything.
-3. If this is an edit, modify the *existing* plans from history accordingly.
-4. VERIFY all added/modified items against the database.
-   - **Labs**: Use `test_name` for lookup.
-   - **Status**: If any item is not found, set `"verified": false` (NOT null).
+2. If this is a NEW plan (no history), extract and verify all items from the doctor's notes.
+3. If this is an EDIT:
+   a. FIRST, extract the LAST FULL PLAN JSON from the session history above.
+   b. USE that plan as your BASE. Copy it exactly.
+   c. ONLY modify the specific fields the doctor explicitly asked to change.
+   d. CARRY OVER all other fields unchanged — medications, lab_tests, grafts, services — everything the doctor did NOT ask to change must remain IDENTICAL to the previous plan.
+   e. VERIFY only the newly added/changed items against the database.
+   f. Do NOT drop, remove, or reset any field unless the doctor explicitly asked to remove it.
+4. SERVICE MATCHING: When searching for a service, pick the BEST MATCH from the DB results. Do not return null if a close match exists.
 5. Determine if the doctor is satisfied ("finished") or still editing ("in_progress").
 
 RETURN JSON ONLY:
@@ -553,8 +563,9 @@ RETURN JSON ONLY:
         result_str = result_str.replace("True", "true").replace("False", "false").replace("None", "null")
         parsed_result = json.loads(result_str)
         
-        # Add Agent Response to Memory
-        agent_msg = f"AGENT (Status: {parsed_result.get('status')}): {parsed_result.get('message')}\nPlans: {json.dumps(parsed_result.get('treatment_plans', []))[:200]}..." 
+        # Add Agent Response to Memory — store FULL plan JSON so edits have complete context
+        full_plans_json = json.dumps(parsed_result.get('treatment_plans', []))
+        agent_msg = f"AGENT (Status: {parsed_result.get('status')}): {parsed_result.get('message')}\nPlans: {full_plans_json}"
         memory_store.add(agent_msg, user_id=request.user_id, metadata={"session_id": request.session_id})
         
         return parsed_result
