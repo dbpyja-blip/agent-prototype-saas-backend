@@ -5,7 +5,7 @@ import re
 from typing import Dict, Any, Optional, List
 from contextlib import contextmanager
 
-from fastapi import APIRouter
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
@@ -24,8 +24,31 @@ load_dotenv(".env.local", override=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# APP & CORS — defined at module level so uvicorn can import it directly
+# (allow_origins=["*"] + allow_credentials=True is forbidden by the CORS spec;
+#  browsers reject it. Use an explicit origin list instead.)
+# ---------------------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    "https://healthcareagents.dimensionleap.com",
+    "https://dimensionleap-ai-health.vercel.app",
+    "http://localhost:3000",
+]
+
+app = FastAPI(title="Treatment Planner Agent")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 # Initialize Router
 router = APIRouter()
+app.include_router(router)
 
 # --------------------------------------------------------------------------------
 # 1. MOCK DATA (Replaces Database)
@@ -580,22 +603,14 @@ RETURN JSON ONLY:
             "error": str(e)
         }
 
+# Health-check endpoint so Render's GET / returns 200 instead of 404
+# (a persistent 404 on the health check can cause Render to mark the service unhealthy)
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "service": "treatment-planner"}
+
 if __name__ == "__main__":
     import uvicorn
-    from fastapi import FastAPI
-    # NO pool init needed for Mock DB
-    
-    app = FastAPI()
-    
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Allows all origins - restrict in production
-        allow_credentials=True,
-        allow_methods=["*"],  # Allows all methods including OPTIONS, POST, etc.
-        allow_headers=["*"],  # Allows all headers
-    )
-    
-    app.include_router(router)
-    
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    # Read PORT from env (Render injects it); fall back to 8002 for local dev
+    port = int(os.getenv("PORT", 8002))
+    uvicorn.run(app, host="0.0.0.0", port=port)
