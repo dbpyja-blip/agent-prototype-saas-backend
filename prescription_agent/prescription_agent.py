@@ -182,7 +182,12 @@ def run_analysis(raw_text: str):
         # Fallback if parsing failed but we have text (shouldn't happen with output_pydantic)
         raise ValueError(f"Failed to generate structured SafetyReport. Raw: {result.raw}")
 
-# --- 7. API ENDPOINT ---
+# --- 7. HEALTH CHECK (required by Render — a 404 on GET / marks the service unhealthy) ---
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "service": "prescription-agent"}
+
+# --- 8. API ENDPOINT ---
 @app.post("/process-prescription", response_model=SafetyReport)
 async def process_prescription(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
