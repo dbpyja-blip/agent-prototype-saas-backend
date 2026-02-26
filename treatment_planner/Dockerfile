@@ -16,4 +16,7 @@ COPY . .
 
 EXPOSE 8002
 
-CMD ["python", "treatment_planner.py"]
+# Shell-form CMD so $PORT env var (set in Render dashboard) is expanded at runtime.
+# Falls back to 8002 if PORT is not set (e.g. local docker run without -e PORT=...).
+# Using uvicorn directly (not python treatment_planner.py) so app is imported properly.
+CMD uvicorn treatment_planner:app --host 0.0.0.0 --port ${PORT:-8002}
