@@ -46,9 +46,10 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Initialize Router
+# Initialize Router — routes are registered via @router decorators further below.
+# app.include_router(router) is called at the BOTTOM of the file, after all
+# @router.post / @router.get decorators have been applied, so FastAPI sees every route.
 router = APIRouter()
-app.include_router(router)
 
 # --------------------------------------------------------------------------------
 # 1. MOCK DATA (Replaces Database)
@@ -603,14 +604,18 @@ RETURN JSON ONLY:
             "error": str(e)
         }
 
-# Health-check endpoint so Render's GET / returns 200 instead of 404
-# (a persistent 404 on the health check can cause Render to mark the service unhealthy)
+# Register all router routes with the app NOW — after every @router decorator above has run.
+# This must be at module level (not inside __main__) so uvicorn can import `app` directly.
+app.include_router(router)
+
+# Health-check endpoint — Render's GET / health ping returns 200 (not 405/404)
 @app.get("/")
 async def health_check():
     return {"status": "ok", "service": "treatment-planner"}
 
 if __name__ == "__main__":
     import uvicorn
-    # Read PORT from env (Render injects it); fall back to 8002 for local dev
+    # Read PORT from env; fall back to 8002 for local dev.
+    # On Render, set PORT=8002 in the environment variables so the proxy routes to 8002.
     port = int(os.getenv("PORT", 8002))
     uvicorn.run(app, host="0.0.0.0", port=port)
