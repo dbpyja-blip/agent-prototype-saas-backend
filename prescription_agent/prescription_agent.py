@@ -17,12 +17,24 @@ load_dotenv()
 app = FastAPI(title="Consultation Agent - Production Grade")
 
 from fastapi.middleware.cors import CORSMiddleware
+
+# allow_origins=["*"] is incompatible with allow_credentials=True per the CORS spec.
+# Browsers will refuse the response if both are set simultaneously because a wildcard
+# origin cannot be used when credentials (cookies / auth headers) are included.
+# Solution: list every trusted front-end origin explicitly so credentials work correctly,
+# and fall back to the wildcard-without-credentials pattern for any other caller.
+ALLOWED_ORIGINS = [
+    "https://healthcareagents.dimensionleap.com",
+    # add more origins here if needed, e.g. "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,   # explicit list — required when credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # --- 1. LLM CONFIGURATION ---
