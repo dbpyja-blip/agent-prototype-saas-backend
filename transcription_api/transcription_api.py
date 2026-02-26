@@ -74,14 +74,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         # Step 2: Configure Transcriber
         transcriber = aai.Transcriber()
-        # Universal-2 ("best") model with code_switching=True handles mixed-language audio
-        # (e.g., Hindi + English in the same recording / "Hinglish").
-        # language_detection alone only detects a single dominant language for the whole file.
-        # code_switching=True allows the model to switch languages word-by-word mid-audio.
+        # "best" model (Universal-2) with language_detection=True supports 99+ languages.
+        # It will automatically detect the dominant language(s) in the audio.
         config = aai.TranscriptionConfig(
-            speech_model=aai.SpeechModel.best,  # Universal-2: 99-language code-switching support
-            language_detection=True,
-            code_switching=True                 # ← KEY: enables mid-audio language switching
+            speech_model=aai.SpeechModel.best,
+            language_detection=True
         )
 
         # Step 3: Run Transcription (offloaded to thread pool)
