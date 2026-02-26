@@ -25,7 +25,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # and fall back to the wildcard-without-credentials pattern for any other caller.
 ALLOWED_ORIGINS = [
     "https://healthcareagents.dimensionleap.com",
-    # add more origins here if needed, e.g. "http://localhost:3000"
+    "https://dimensionleap-ai-health.vercel.app",
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
