@@ -70,12 +70,20 @@ logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Pre-Consultation Agent Service")
+
+ALLOWED_ORIGINS = [
+    "https://healthcareagents.dimensionleap.com",
+    "https://dimensionleap-ai-health.vercel.app",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -697,6 +705,10 @@ async def pre_consultation_endpoint(request: PreConsultationRequest):
         logger.error(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "pre-consultation-agent"}
 
 @app.get("/health")
 async def health():
