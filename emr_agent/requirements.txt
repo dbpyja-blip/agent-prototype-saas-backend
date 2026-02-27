@@ -1,0 +1,27 @@
+# ── Core web framework ───────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+
+# ── Azure OpenAI SDK ─────────────────────────
+openai
+
+# ── Vector database ──────────────────────────
+chromadb
+
+# ── PDF processing ───────────────────────────
+PyMuPDF
+pdf2image
+
+# ── OCR ─────────────────────────────────────
+pytesseract
+Pillow
+
+# ── Fuzzy name matching ──────────────────────
+rapidfuzz
+
+# ── Utilities ────────────────────────────────
+python-dotenv
+httpx
+aiofiles
