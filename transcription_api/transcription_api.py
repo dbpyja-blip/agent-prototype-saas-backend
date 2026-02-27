@@ -35,12 +35,19 @@ app = FastAPI(
     description="Optimized parallel transcription service."
 )
 
-# CORS is already configured - this should work correctly
+ALLOWED_ORIGINS = [
+    "https://healthcareagents.dimensionleap.com",
+    "https://dimensionleap-ai-health.vercel.app",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # --- 4. Middleware for Request Timing ---
