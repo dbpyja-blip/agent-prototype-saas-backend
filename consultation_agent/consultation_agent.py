@@ -147,12 +147,19 @@ class AgenticOrchestrator:
 app = FastAPI(title="Raw Consultation Agent", version="2.1.0")
 orchestrator = AgenticOrchestrator()
 
+ALLOWED_ORIGINS = [
+    "https://healthcareagents.dimensionleap.com",
+    "https://dimensionleap-ai-health.vercel.app",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 @app.post("/agent/unstructured-note", response_model=ServiceResponse)
@@ -164,6 +171,10 @@ async def generate_note(request: UnstructuredRequest):
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
     return result
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "consultation-agent"}
 
 @app.get("/health")
 async def health_check():
