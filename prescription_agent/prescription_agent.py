@@ -1,7 +1,8 @@
-
 import os
+import re
 import fitz  # PyMuPDF
 import requests
+import asyncio
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel, Field
@@ -11,7 +12,6 @@ from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import tool
 
-# Load Environment Variables
 load_dotenv()
 
 app = FastAPI(title="Consultation Agent - Production Grade")
@@ -21,8 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # allow_origins=["*"] is incompatible with allow_credentials=True per the CORS spec.
 # Browsers will refuse the response if both are set simultaneously because a wildcard
 # origin cannot be used when credentials (cookies / auth headers) are included.
-# Solution: list every trusted front-end origin explicitly so credentials work correctly,
-# and fall back to the wildcard-without-credentials pattern for any other caller.
+# Solution: list every trusted front-end origin explicitly so credentials work correctly.
 ALLOWED_ORIGINS = [
     "https://healthcareagents.dimensionleap.com",
     "https://dimensionleap-ai-health.vercel.app",
@@ -39,7 +38,6 @@ app.add_middleware(
 )
 
 # --- 1. LLM CONFIGURATION ---
-# Using gpt-4o for complex reasoning agents to reduce hallucinations
 primary_llm = LLM(
     model=f"azure/{os.getenv('AZURE_LLM_DEPLOYMENT')}",
     api_key=os.getenv("AZURE_API_KEY"),
@@ -47,7 +45,8 @@ primary_llm = LLM(
     api_version=os.getenv("AZURE_API_VERSION"),
     temperature=0.0
 )
-# --- 2. ENHANCED PRODUCTION TOOLS ---
+
+# --- 2. ENHANCED PRODUCTION TOOLS (Merged from p.py) ---
 @tool("OpenFDA_Deep_Search")
 def deep_openfda_tool(drug_name: str) -> str:
     """
@@ -99,18 +98,46 @@ class SafetyReport(BaseModel):
     compliance_check: str = Field(description="Audit of document instructions vs safety data.")
     disclaimer: str = "OFFICIAL: This is an AI prototype. Validation by a licensed MD/Pharmacist is mandatory."
 
-# --- 5. PDF PROCESSING ---
+# --- 4. PDF PROCESSING (Spatial Extraction from p.py) ---
 def extract_text_from_pdf(file_bytes):
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         # Using blocks keeps the association between a drug name and the note below it
-        return "\\n".join([page.get_text("blocks")[i][4] for page in doc for i in range(len(page.get_text("blocks")))])
+        return "\n".join([page.get_text("blocks")[i][4] for page in doc for i in range(len(page.get_text("blocks")))])
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"PDF Parsing Error: {str(e)}")
 
-# --- 6. CORE BUSINESS LOGIC (Stateless) ---
-def run_analysis(raw_text: str):
-    # --- AGENT INITIALIZATION (STATELESS) ---
+# --- 5. THE GATEWAY & ENGINE LOGIC ---
+async def run_analysis(raw_text: str):
+    # ==========================================
+    # STAGE 1: THE GATEWAY (ISOLATED)
+    # ==========================================
+    gatekeeper = Agent(
+        role='Medical Document Classifier',
+        goal='Determine if the text is a medical prescription. Answer YES or NO.',
+        backstory="You are a strict security auditor. If a document is a parking memo, news article, or personal letter, it is NOT a prescription.",
+        llm=primary_llm
+    )
+
+    t0 = Task(
+        description=f"Analyze this text: {raw_text}. Is this a medical prescription? Answer ONLY 'YES' or 'NO'.",
+        expected_output="A simple 'YES' or 'NO'.",
+        agent=gatekeeper
+    )
+
+    gate_crew = Crew(agents=[gatekeeper], tasks=[t0], memory=False)
+    gate_result = await asyncio.to_thread(gate_crew.kickoff)
+    
+    # --- THE TERMINATION POINT ---
+    if "YES" not in str(gate_result.raw).upper():
+        raise HTTPException(
+            status_code=422, 
+            detail="Validation Error: The uploaded document is not a medical prescription. Processing terminated."
+        )
+
+    # ==========================================
+    # STAGE 2: THE CORE ENGINE (Merged p.py Logic)
+    # ==========================================
     extractor = Agent(
         role='Clinical Registrar',
         goal='Extract medications and dosages from {text}. Capture handwritten notes ONLY.',
@@ -164,30 +191,31 @@ def run_analysis(raw_text: str):
         output_pydantic=SafetyReport
     )
 
-    # Crew is initialized fresh per request to prevent context leakage
-    crew = Crew(
+    # memory=False is critical to stop hallucinations between requests
+    engine_crew = Crew(
         agents=[extractor, pharmacist, verifier],
         tasks=[t1, t2, t3],
-        process=Process.sequential
+        process=Process.sequential,
+        memory=False
     )
 
-    result = crew.kickoff()
+    final_result = await asyncio.to_thread(engine_crew.kickoff)
     
-    # Ensure we return the Pydantic model
-    if hasattr(result, 'pydantic') and result.pydantic:
-        return result.pydantic
-    elif hasattr(result, 'json_dict') and result.json_dict:
-        return SafetyReport(**result.json_dict)
+    # Return Pydantic model
+    if hasattr(final_result, 'pydantic') and final_result.pydantic:
+        return final_result.pydantic
+    elif hasattr(final_result, 'json_dict') and final_result.json_dict:
+        return SafetyReport(**final_result.json_dict)
     else:
-        # Fallback if parsing failed but we have text (shouldn't happen with output_pydantic)
-        raise ValueError(f"Failed to generate structured SafetyReport. Raw: {result.raw}")
+        # Fallback if parsing failed but we have text
+        raise ValueError("Failed to generate structured SafetyReport.")
 
-# --- 7. HEALTH CHECK (required by Render — a 404 on GET / marks the service unhealthy) ---
+# --- 6. HEALTH CHECK (required by Render — a 404 on GET / marks the service unhealthy) ---
 @app.get("/")
 async def health_check():
     return {"status": "ok", "service": "prescription-agent"}
 
-# --- 8. API ENDPOINT ---
+# --- 7. API ENDPOINT ---
 @app.post("/process-prescription", response_model=SafetyReport)
 async def process_prescription(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
@@ -195,7 +223,7 @@ async def process_prescription(file: UploadFile = File(...)):
     
     content = await file.read()
     raw_text = extract_text_from_pdf(content)
-    return run_analysis(raw_text)
+    return await run_analysis(raw_text)
 
 if __name__ == "__main__":
     import uvicorn
